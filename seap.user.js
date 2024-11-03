@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SEAP
 // @namespace    http://tampermonkey.net/
-// @version      2024-11-03
-// @description  Delete seznam emails with selected attachment tyoes
+// @version      0.0.2
+// @description  Delete seznam emails with selected attachment types (move to trash)
 // @author       https://github.com/xeaft/
 // @match        https://email.seznam.cz/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
@@ -13,24 +13,26 @@ window.addEventListener("load",
 function() {
     'use strict';
 
-    let DELETE_VIDEOS = true;
-    let DELETE_PDFS = false;
-    let DELETE_POWERPOINTS = false;
-    let DELETE_DOCS = false;
-    let DELETE_OTHERS = false;
+	let Configuration = { // <= 0: Do Nothing, 1: Delete (Move to trash), >= 2: Hide locally
+		Videos: 1,
+		PDFs: 0,
+		Presentations: 0,
+		Docs: 0,
+		All_Others: 0,
+		Hide_Deletion: true // Tries to hide the process of deleting. Hides orange checkmarks and notifications. Does not change anything in hiding or/and doing nothing
+	}
 
-    let HIDE_DELETE = true;
+	
+	if (window.location.href.search("mid=") > -1) {
+		return; // E-mail is focused.
+	}
 
     let emailsWithAttachments = Array.from(document.getElementsByClassName("icon icon-paperclip"));
-    let videos = [];
-    let powerpoints = [];
-    let pdfs = [];
-    let docs = [];
-    let other = [];
-
+	let toDeleteThings = [];
+	let toHideThings = [];
     let selected = 0;
 
-    if (HIDE_DELETE) {
+    if (Configuration.Hide_Deletion) {
         const style = document.createElement('style');
         style.id = "NO_CHECKBOX_STYLE"
 
@@ -78,80 +80,70 @@ function() {
         }
 
         let attachmentType = attParent.innerText.toLowerCase();
+		
+		let isKnownAttach = false;
 
-        if (attachmentType == "pdf") {
-            pdfs.push(attachment);
-        } else if (attachmentType == "video") {
-            videos.push(attachment);
-        } else if (attachmentType == "word") {
-            docs.push(attachment);
-        } else if (attachmentType == "powerpoint") {
-            powerpoints.push(attachment);
-        } else {
-            other.push(attachment);
+		for (let i of ["pdf", "video", "word", "powerpoint"]) {
+			if (attachmentType == i) {
+				isKnownAttach = true;
+			}
+		}
+
+        if (attachmentType == "pdf" && Configuration.PDFs) {
+          if (Configuration.PDFs == 1) {
+            toDeleteThings.push(attachment);
+          } else {
+            toHideThings.push(attachment);
+          }
+        } else if (attachmentType == "video" && Configuration.Videos) {
+          if (Configuration.Videos == 1) {
+            toDeleteThings.push(attachment);
+          } else {
+            toHideThings.push(attachment);
+          }
+        } else if (attachmentType == "word" && Configuration.Docs) {
+          if (Configuration.Docs == 1) {
+            toDeleteThings.push(attachment);
+          } else {
+            toHideThings.push(attachment);
+          }
+        } else if (attachmentType == "powerpoint" && Configuration.Presentations) {
+          if (Configuration.Presentations == 1) {
+            toDeleteThings.push(attachment);
+          } else {
+            toHideThings.push(attachment);
+          }
+        } else if (!isKnownAttach && Configuration.All_Others){
+          if (Configuration.All_Others == 1) {
+            toDeleteThings.push(attachment);
+          } else {
+            toHideThings.push(attachment);
+          }
         }
     }
 
-    if (DELETE_VIDEOS) {
-        for (let i of videos) {
-            try {
-                let msg = getMessageOfAttElement(i);
-                let checkbox = getMessageCheckbox(msg);
-                checkbox.click();
-                selected++;
-            } catch {}
-        }
-    }
 
-    if (DELETE_PDFS) {
-        for (let i of pdfs) {
-            try {
-                let msg = getMessageOfAttElement(i);
-                let checkbox = getMessageCheckbox(msg);
-                checkbox.click();
-                selected++;
-            } catch {}
-        }
-    }
+    for (let i of toDeleteThings) {
+        try {
+		    let msg = getMessageOfAttElement(i);
+            let checkbox = getMessageCheckbox(msg);
+            checkbox.click();
+            selected++;
+        } catch {}
+	}
 
-    if (DELETE_POWERPOINTS) {
-        for (let i of powerpoints) {
-            try {
-                let msg = getMessageOfAttElement(i);
-                let checkbox = getMessageCheckbox(msg);
-                checkbox.click();
-                selected++;
-            } catch {}
-        }
-    }
-
-    if (DELETE_DOCS) {
-        for (let i of docs) {
-            try {
-                let msg = getMessageOfAttElement(i);
-                let checkbox = getMessageCheckbox(msg);
-                checkbox.click();
-                selected++;
-            } catch {}
-        }
-    }
-
-    if (DELETE_OTHERS) {
-        for (let i of other) {
-            try {
-                let msg = getMessageOfAttElement(i);
-                let checkbox = getMessageCheckbox(msg);
-                checkbox.click();
-                selected++;
-            } catch {}
-        }
-    }
+	for (let i of toHideThings) {
+		try {
+			let msg = getMessageOfAttElement(i);
+			msg.style.display = "none"; // alt .remove()
+		} catch {}
+	}
 
     if (selected) {
         delButton.click();
     }
 
-    if (HIDE_DELETE) {
+    if (Configuration.Hide_Deletion) {
         const style2 = document.createElement('style');
           style2.textContent = `
           wm-notification {
